@@ -1,4 +1,5 @@
 // Simple local cache implements using LRU and expired
+// Author: Jayden <liexusong@qq.com>
 
 package lcache
 
@@ -25,8 +26,8 @@ type Cache struct {
 	expire   Heap             // Expire time heap
 	lru      *list.List       // Item LRU list
 	counter  int64            // Current object numbers
+	stopChan chan struct{}    // Stop GC cycle channel
 	MaxSize  int64            // Max object numbers
-	StopChan chan struct{}
 }
 
 func (h Heap) Len() int {
@@ -74,8 +75,8 @@ func New(maxSize int64) *Cache {
 		items:    make(map[string]*Item),
 		expire:   make(Heap, 0),
 		lru:      list.New(),
+		stopChan: make(chan struct{}),
 		MaxSize:  maxSize,
-		StopChan: make(chan struct{}),
 	}
 
 	heap.Init(&cache.expire)
@@ -85,11 +86,11 @@ func New(maxSize int64) *Cache {
 	return cache
 }
 
+// Objects GC cycle routine
 func (c *Cache) GCItemsCycle() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 
 	for {
-
 		exitFlag := false
 
 		select {
@@ -104,20 +105,20 @@ func (c *Cache) GCItemsCycle() {
 				if size > 0 {
 					item := c.expire[size-1]
 
-					if item.ttl < current { // Item was expired?
+					if item.ttl < current { // Object was expired?
 						c.removeItem(item)
 						continue
 					}
 				}
 
 				if c.counter > c.MaxSize { // Object numbers above the MaxSize?
-					kick := int64(float64(c.counter) * 0.3)
+					target := int64(float64(c.MaxSize) * 0.8)
 
-					for i := int64(0); i < kick; i++ {
+					for c.counter > target {
 						elem := c.lru.Front()
 
 						item := elem.Value.(*Item)
-						if item == nil { // Bug?
+						if item == nil {
 							panic("Item in LRU list but is a nil object")
 						}
 
@@ -130,7 +131,7 @@ func (c *Cache) GCItemsCycle() {
 
 			c.mutex.Unlock()
 
-		case <-c.StopChan:
+		case <-c.stopChan:
 			exitFlag = true
 		}
 
@@ -140,6 +141,7 @@ func (c *Cache) GCItemsCycle() {
 	}
 }
 
+// Set key and value into cache
 func (c *Cache) Set(key string, val interface{}, expire int64) {
 	ttl := int64(0)
 
@@ -157,13 +159,14 @@ func (c *Cache) Set(key string, val interface{}, expire int64) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if tmp, exists := c.items[key]; exists {
-		c.removeItem(tmp)
+	if old, exists := c.items[key]; exists {
+		c.removeItem(old)
 	}
 
 	c.pushItem(item)
 }
 
+// Get a key's value from cache
 func (c *Cache) Get(key string) interface{} {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -173,7 +176,7 @@ func (c *Cache) Get(key string) interface{} {
 		return nil
 	}
 
-	if item.ttl < time.Now().Unix() { // Item expired?
+	if item.ttl > 0 && item.ttl < time.Now().Unix() { // Item expired?
 		c.removeItem(item)
 		return nil
 	}
@@ -183,11 +186,10 @@ func (c *Cache) Get(key string) interface{} {
 
 	item.ele = c.lru.PushBack(item)
 
-	val := item.val
-
-	return val
+	return item.val
 }
 
+// Delete a key from cache
 func (c *Cache) Delete(key string) bool {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -200,43 +202,56 @@ func (c *Cache) Delete(key string) bool {
 	return false
 }
 
+// Return cache's object numbers
 func (c *Cache) Size() int64 {
 	c.mutex.Lock()
 	size := c.counter
 	c.mutex.Unlock()
+
 	return size
 }
 
+// Free the cache
 func (c *Cache) Free() {
-	c.StopChan <- struct{}{} // Stop GC cycle
+	c.stopChan <- struct{}{} // Stop GC cycle
 
 	c.mutex.Lock()
+
 	for _, item := range c.items {
 		c.removeItem(item)
 	}
+
 	c.mutex.Unlock()
 }
 
 func (c *Cache) pushItem(item *Item) {
+	// 1. Push into map
 	c.items[item.key] = item
 
+	// 2. Push into expire heap
 	if item.ttl > 0 {
 		heap.Push(&c.expire, item)
 	}
 
+	// 3. Push into LRU list
 	item.ele = c.lru.PushBack(item)
 
+	// 4. Increase object numbers
 	c.counter++
 }
 
 func (c *Cache) removeItem(item *Item) {
+	// 1. Delete from map
 	delete(c.items, item.key)
 
+	// 2. Delete from expire heap
 	if item.idx >= 0 {
 		heap.Remove(&c.expire, item.idx)
 	}
 
+	// 3. Delete from LRU list
 	c.lru.Remove(item.ele)
 
+	// 4. Decrease object numbers
 	c.counter--
 }
