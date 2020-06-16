@@ -1,5 +1,7 @@
 # Local cache for Golang
 
+Implements by LRU algorithm
+
 ## Methods:
 
 ### 1. Create cache object
