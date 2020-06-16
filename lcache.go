@@ -12,7 +12,7 @@ import (
 
 type Item struct {
 	idx int           // Heap index
-	ttl int64         // Time to lift
+	ttl int64         // Time to life
 	ele *list.Element // LRU element pointer
 	key string        // key
 	val interface{}   // value
