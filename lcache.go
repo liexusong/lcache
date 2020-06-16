@@ -71,7 +71,16 @@ func (h *Heap) Pop() interface{} {
 // MaxSize: set the max object numbers of cache
 // If cache's objects above the MaxSize
 // GCItemsCycle() routine is recycling objects
-func New(maxSize int64, gcRate int64) *Cache {
+func New(maxSize int64, gcRates... int64) *Cache {
+	var gcRate int64 = 5
+
+	if len(gcRates) > 0 {
+		gcRate = gcRates[0]
+		if gcRate <= 0 {
+			gcRate = 5
+		}
+	}
+
 	cache := &Cache{
 		items:    make(map[string]*Item),
 		expire:   make(Heap, 0),
