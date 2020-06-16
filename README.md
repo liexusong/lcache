@@ -1,6 +1,49 @@
 # Local cache for Golang
 
-### Usage：
+## Methods:
+
+### 1. Create cache object
+
+```go
+// Create local cache object
+// @objectMaxSize: is the max object numbers
+cache := lcache.New(objectMaxSize int64)
+```
+
+### 2. Set a key and value peer
+
+```go
+// Set a key and value peer into cache
+// @key: the key
+// @value: the value
+// @expire: the expire time by seconds(0 is away not expire)
+cache.Set(key string, value interface{}, expire int64)
+```
+
+### 3. Get value by a key
+
+```go
+// Get value by a key
+// @key: the key
+cache.Get(key string) interface{}
+```
+
+### 4. Delete a key
+
+```go
+// Delete a key
+// @key: the key
+cache.Delete(key string) bool
+```
+
+### 5. Free the cache
+
+```go
+// Free the cache
+cache.Free()
+```
+
+## Example：
 
 ```go
 package main
