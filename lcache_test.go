@@ -7,7 +7,7 @@ import (
 )
 
 func TestCache_Set(t *testing.T) {
-	cache := New(10000)
+	cache := New(10000, 5)
 
 	for i := 0; i < 100000; i++ {
 		key := fmt.Sprintf("key_%d", i)

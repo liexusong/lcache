@@ -9,7 +9,8 @@ Implements by LRU algorithm
 ```go
 // Create local cache object
 // @objectMaxSize: is the max object numbers
-cache := lcache.New(objectMaxSize int64)
+// @gcRate: is the objects GC rate (seconds)
+cache := lcache.New(objectMaxSize int64, gcRate int64)
 ```
 
 ### 2. Set a key and value peer
@@ -55,7 +56,7 @@ import(
 )
 
 func main() {
-    cache := lcache.New(100000) // max 100000 objects
+    cache := lcache.New(100000, 5) // max 100000 objects
     
     for i := 0; i < 100000; i++ {
         key := fmt.Sprintf("key_%d", i)

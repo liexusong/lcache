@@ -1,5 +1,5 @@
 // Simple local cache implements using LRU and expired
-// Author: Jayden <liexusong@qq.com>
+// Author: Jayden<liexusong@qq.com>
 
 package lcache
 
@@ -26,6 +26,7 @@ type Cache struct {
 	expire   Heap             // Expire time heap
 	lru      *list.List       // Item LRU list
 	counter  int64            // Current object numbers
+	gcRate   int64            // Objects GC rate
 	stopChan chan struct{}    // Stop GC cycle channel
 	MaxSize  int64            // Max object numbers
 }
@@ -70,25 +71,26 @@ func (h *Heap) Pop() interface{} {
 // MaxSize: set the max object numbers of cache
 // If cache's objects above the MaxSize
 // GCItemsCycle() routine is recycling objects
-func New(maxSize int64) *Cache {
+func New(maxSize int64, gcRate int64) *Cache {
 	cache := &Cache{
 		items:    make(map[string]*Item),
 		expire:   make(Heap, 0),
 		lru:      list.New(),
 		stopChan: make(chan struct{}),
+		gcRate:   gcRate,
 		MaxSize:  maxSize,
 	}
 
 	heap.Init(&cache.expire)
 
-	go cache.GCItemsCycle()
+	go cache.GCObjectsCycle() // Starting the objects GC routine
 
 	return cache
 }
 
 // Objects GC cycle routine
-func (c *Cache) GCItemsCycle() {
-	ticker := time.NewTicker(5 * time.Second)
+func (c *Cache) GCObjectsCycle() {
+	ticker := time.NewTicker(time.Duration(c.gcRate) * time.Second)
 
 	for {
 		exitFlag := false
@@ -213,7 +215,7 @@ func (c *Cache) Size() int64 {
 
 // Free the cache
 func (c *Cache) Free() {
-	c.stopChan <- struct{}{} // Stop GC cycle
+	c.stopChan <- struct{}{} // Stop the objects GC routine
 
 	c.mutex.Lock()
 
