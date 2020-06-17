@@ -1,4 +1,5 @@
 // Simple local cache implements using LRU and expired
+// Date: 2020/06/16
 // Author: Jayden<liexusong@qq.com>
 
 package lcache
@@ -71,7 +72,7 @@ func (h *Heap) Pop() interface{} {
 // MaxSize: set the max object numbers of cache
 // If cache's objects above the MaxSize
 // GCItemsCycle() routine is recycling objects
-func New(maxSize int64, gcRates... int64) *Cache {
+func New(maxSize int64, gcRates ...int64) *Cache {
 	var gcRate int64 = 5
 
 	if len(gcRates) > 0 {
@@ -122,17 +123,15 @@ func (c *Cache) GCObjectsCycle() {
 					}
 				}
 
-				if c.counter > c.MaxSize { // Object numbers above the MaxSize?
-					target := int64(float64(c.MaxSize) * 0.8)
+				target := int64(float64(c.MaxSize) * 0.9) // Check object numbers exceed MaxSize 90%?
 
-					for c.counter > target && c.lru.Len() > 0 {
-						item := c.lru.Front().Value.(*Item)
-						if item == nil {
-							panic("Item in LRU list but is a nil object")
-						}
-
-						c.removeItem(item)
+				for c.counter > target && c.lru.Len() > 0 {
+					item := c.lru.Front().Value.(*Item)
+					if item == nil {
+						panic("Item in LRU list but is a nil object")
 					}
+
+					c.removeItem(item)
 				}
 
 				break
@@ -158,7 +157,7 @@ func (c *Cache) Set(key string, val interface{}, expire int64) {
 		ttl = time.Now().Unix() + expire
 	}
 
-	item := &Item{
+	newItem := &Item{
 		ttl: ttl,
 		key: key,
 		val: val,
@@ -167,11 +166,21 @@ func (c *Cache) Set(key string, val interface{}, expire int64) {
 
 	c.mutex.Lock()
 
-	if old, exists := c.items[key]; exists {
-		c.removeItem(old)
+	// If key exists remove it
+	if oldItem, exists := c.items[key]; exists {
+		c.removeItem(oldItem)
 	}
 
-	c.pushItem(item)
+	// If object numbers exceed MaxSize
+	if c.counter >= c.MaxSize && c.lru.Len() > 0 {
+		item := c.lru.Front().Value.(*Item)
+		if item != nil {
+			c.removeItem(item)
+		}
+	}
+
+	// Push new item into cache
+	c.pushItem(newItem)
 
 	c.mutex.Unlock()
 }
