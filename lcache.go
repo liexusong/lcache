@@ -125,10 +125,8 @@ func (c *Cache) GCObjectsCycle() {
 				if c.counter > c.MaxSize { // Object numbers above the MaxSize?
 					target := int64(float64(c.MaxSize) * 0.8)
 
-					for c.counter > target {
-						elem := c.lru.Front()
-
-						item := elem.Value.(*Item)
+					for c.counter > target && c.lru.Len() > 0 {
+						item := c.lru.Front().Value.(*Item)
 						if item == nil {
 							panic("Item in LRU list but is a nil object")
 						}
@@ -168,13 +166,14 @@ func (c *Cache) Set(key string, val interface{}, expire int64) {
 	}
 
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
 
 	if old, exists := c.items[key]; exists {
 		c.removeItem(old)
 	}
 
 	c.pushItem(item)
+
+	c.mutex.Unlock()
 }
 
 // Get a key's value from cache
